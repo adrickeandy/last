@@ -8,6 +8,7 @@ import '../../../core/widgets/skeleton_loader.dart';
 import '../../../models/profile_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/chat_provider.dart';
+import '../../../providers/ui_provider.dart';
 import '../../../services/profile_service.dart';
 
 class NewChatDialog extends StatefulWidget {
@@ -60,8 +61,11 @@ class _NewChatDialogState extends State<NewChatDialog> {
     if (user == null) return;
 
     final chat = context.read<ChatProvider>();
+    final ui = context.read<UIProvider>(); // ADDED
+
     Navigator.of(context).pop();
     await chat.startOrGetDirectChat(user.id, other.id);
+    ui.setTab(AppTab.messages); // ADDED — this was the missing navigation
   }
 
   @override
