@@ -5,6 +5,7 @@ import '../../../core/widgets/avatar_view.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/glass_text_field.dart';
 import '../../../core/widgets/skeleton_loader.dart';
+import '../../../core/widgets/toast_overlay.dart';
 import '../../../models/profile_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/chat_provider.dart';
@@ -61,11 +62,24 @@ class _NewChatDialogState extends State<NewChatDialog> {
     if (user == null) return;
 
     final chat = context.read<ChatProvider>();
-    final ui = context.read<UIProvider>(); // ADDED
+    final ui = context.read<UIProvider>();
 
     Navigator.of(context).pop();
-    await chat.startOrGetDirectChat(user.id, other.id);
-    ui.setTab(AppTab.messages); // ADDED — this was the missing navigation
+
+    try {
+      await chat.startOrGetDirectChat(user.id, other.id);
+      ui.setTab(AppTab.messages);
+    } catch (e) {
+      // This is the important bit: instead of silently dying and just
+      // dropping you back on the previous screen, show exactly what broke.
+      if (mounted) {
+        ToastOverlay.show(
+          context,
+          'Could not start chat: $e',
+          type: ToastType.error,
+        );
+      }
+    }
   }
 
   @override
