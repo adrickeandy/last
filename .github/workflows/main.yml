@@ -24,9 +24,15 @@ jobs:
     runs-on: windows-latest
 
     steps:
+      # --------------------------------------------------------
+      # Checkout
+      # --------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # --------------------------------------------------------
+      # Flutter
+      # --------------------------------------------------------
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -39,6 +45,9 @@ jobs:
       - name: Enable Android
         run: flutter config --enable-android
 
+      # --------------------------------------------------------
+      # Dependencies
+      # --------------------------------------------------------
       - name: Flutter Pub Get
         run: flutter pub get
 
@@ -60,30 +69,70 @@ jobs:
           Set-Content -Path "env.json" -Value $envJson
 
       # --------------------------------------------------------
-      # Fix Kotlin incremental cache/path problem
+      # Create gradle.properties if missing
+      # Fix Kotlin incremental cache problem
       # --------------------------------------------------------
-      - name: Disable Kotlin incremental compilation
+      - name: Configure Kotlin
         shell: pwsh
         run: |
-          Add-Content android/gradle.properties ""
-          Add-Content android/gradle.properties "kotlin.incremental=false"
+          $file = "android/gradle.properties"
+
+          if (!(Test-Path "android")) {
+            Write-Error "Android directory does not exist."
+            exit 1
+          }
+
+          if (!(Test-Path $file)) {
+            New-Item -ItemType File -Path $file -Force | Out-Null
+            Write-Host "Created android/gradle.properties"
+          }
+
+          $content = Get-Content $file -ErrorAction SilentlyContinue
+
+          if ($content -notcontains "kotlin.incremental=false") {
+            Add-Content $file "kotlin.incremental=false"
+          }
+
+          Write-Host "Current android/gradle.properties:"
+          Get-Content $file
 
       # --------------------------------------------------------
-      # Clean previous build/cache
+      # Clean Flutter
       # --------------------------------------------------------
       - name: Flutter Clean
         run: flutter clean
 
+      # --------------------------------------------------------
+      # Clean Gradle
+      # --------------------------------------------------------
       - name: Clean Gradle
         shell: pwsh
         working-directory: android
-        run: .\gradlew.bat clean
+        run: |
+          .\gradlew.bat clean
 
       # --------------------------------------------------------
       # Build APK
       # --------------------------------------------------------
       - name: Build Android APK
-        run: flutter build apk --release --dart-define-from-file=env.json
+        run: |
+          flutter build apk --release --dart-define-from-file=env.json
+
+      # --------------------------------------------------------
+      # Verify APK
+      # --------------------------------------------------------
+      - name: Verify APK
+        shell: pwsh
+        run: |
+          $apk = "build/app/outputs/flutter-apk/app-release.apk"
+
+          if (!(Test-Path $apk)) {
+            Write-Error "APK was not created."
+            exit 1
+          }
+
+          Write-Host "APK successfully created:"
+          Get-Item $apk | Select-Object FullName, Length
 
       # --------------------------------------------------------
       # Upload APK
@@ -97,16 +146,22 @@ jobs:
 
 
   # ============================================================
-  # WINDOWS
+  # WINDOWS BUILD
   # ============================================================
   build-windows:
     name: Build Windows
     runs-on: windows-latest
 
     steps:
+      # --------------------------------------------------------
+      # Checkout
+      # --------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # --------------------------------------------------------
+      # Flutter
+      # --------------------------------------------------------
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -116,6 +171,9 @@ jobs:
       - name: Flutter Doctor
         run: flutter doctor -v
 
+      # --------------------------------------------------------
+      # Dependencies
+      # --------------------------------------------------------
       - name: Flutter Pub Get
         run: flutter pub get
 
@@ -140,7 +198,8 @@ jobs:
       # Build Windows
       # --------------------------------------------------------
       - name: Build Windows
-        run: flutter build windows --release --dart-define-from-file=env.json
+        run: |
+          flutter build windows --release --dart-define-from-file=env.json
 
       # --------------------------------------------------------
       # Verify Windows build
@@ -148,18 +207,22 @@ jobs:
       - name: Verify Windows build
         shell: pwsh
         run: |
-          if (!(Test-Path "build\windows\x64\runner\Release")) {
+          $folder = "build/windows/x64/runner/Release"
+
+          if (!(Test-Path $folder)) {
             Write-Error "Windows build directory was not created."
             exit 1
           }
 
+          Write-Host "Windows build created successfully."
+
       # --------------------------------------------------------
-      # Build installer
+      # Build Inno Setup Installer
       # --------------------------------------------------------
       - name: Build Windows Installer
         shell: pwsh
         run: |
-          $iss = "installer\campusx.iss"
+          $iss = "installer/campusx.iss"
 
           if (!(Test-Path $iss)) {
             Write-Error "Installer script not found: $iss"
@@ -173,6 +236,8 @@ jobs:
             exit 1
           }
 
+          Write-Host "Building installer..."
+
           & $iscc $iss
 
           if ($LASTEXITCODE -ne 0) {
@@ -180,8 +245,10 @@ jobs:
             exit $LASTEXITCODE
           }
 
+          Write-Host "Installer built successfully."
+
       # --------------------------------------------------------
-      # Upload Windows application
+      # Upload Windows Build
       # --------------------------------------------------------
       - name: Upload Windows Build
         uses: actions/upload-artifact@v4
@@ -191,11 +258,14 @@ jobs:
           if-no-files-found: error
 
       # --------------------------------------------------------
-      # Upload installer
+      # Upload Installer
       # --------------------------------------------------------
       - name: Upload Windows Installer
         uses: actions/upload-artifact@v4
         with:
           name: campusx-windows-installer
-          path: installer/output/**
+          path: |
+            installer/output/**
+            installer/*.exe
+            output/*.exe
           if-no-files-found: warn
