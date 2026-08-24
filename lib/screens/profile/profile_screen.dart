@@ -52,29 +52,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadProfileData() async {
     setState(() => _isLoading = true);
 
-    final currentUser = context.read<AuthProvider>().user;
-    final profile = await _profileService.fetchProfileByUsername(widget.username);
+    try {
+      final currentUser = context.read<AuthProvider>().user;
+      final profile = await _profileService.fetchProfileByUsername(widget.username);
 
-    if (profile != null) {
-      final posts = await _postService.fetchUserPosts(profile.id, currentUserId: currentUser?.id);
-      final counts = await _profileService.fetchFollowCounts(profile.id);
+      if (profile != null) {
+        final posts = await _postService.fetchUserPosts(profile.id, currentUserId: currentUser?.id);
+        final counts = await _profileService.fetchFollowCounts(profile.id);
 
-      bool isFollow = false;
-      if (currentUser != null && currentUser.id != profile.id) {
-        isFollow = await _profileService.isFollowing(currentUser.id, profile.id);
+        bool isFollow = false;
+        if (currentUser != null && currentUser.id != profile.id) {
+          isFollow = await _profileService.isFollowing(currentUser.id, profile.id);
+        }
+
+        if (mounted) {
+          setState(() {
+            _profile = profile;
+            _userPosts = posts;
+            _followersCount = counts['followers'] ?? 0;
+            _followingCount = counts['following'] ?? 0;
+            _isFollowing = isFollow;
+            _isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _isLoading = false);
       }
-
-      if (mounted) {
-        setState(() {
-          _profile = profile;
-          _userPosts = posts;
-          _followersCount = counts['followers'] ?? 0;
-          _followingCount = counts['following'] ?? 0;
-          _isFollowing = isFollow;
-          _isLoading = false;
-        });
-      }
-    } else {
+    } catch (e, st) {
+      debugPrint('Profile load failed: $e\n$st');
       if (mounted) setState(() => _isLoading = false);
     }
   }
