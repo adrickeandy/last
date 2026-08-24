@@ -69,15 +69,20 @@ class ProfileService {
   }
 
   Future<Map<String, int>> fetchFollowCounts(String userId) async {
+    // NOTE: `follows` has no `id` column (primary key is
+    // follower_id/following_id composite) — selecting 'id' throws a
+    // Postgres "column does not exist" error on every call, which was
+    // the root cause of the profile screen hanging forever with no
+    // error shown. Select an existing column instead.
     final followersRes = await _client
         .from('follows')
-        .select('id')
+        .select('follower_id')
         .eq('following_id', userId)
         .count(CountOption.exact);
 
     final followingRes = await _client
         .from('follows')
-        .select('id')
+        .select('following_id')
         .eq('follower_id', userId)
         .count(CountOption.exact);
 
