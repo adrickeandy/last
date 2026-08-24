@@ -1,0 +1,52 @@
+name: campusx_flutter
+description: "CampusX - Native Flutter Desktop application for campus community."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # Supabase & Backend
+  supabase_flutter: ^2.17.2
+  
+  # State Management
+  provider: ^6.1.2
+  
+  # HTTP & AI Integration
+  http: ^1.2.1
+  
+  # UI & Styling
+  google_fonts: ^6.2.1
+  flutter_markdown: ^0.7.3
+  intl: ^0.19.0
+  uuid: ^4.4.0
+  cached_network_image: ^3.3.1
+  
+  # Desktop & File Picking
+  file_picker: ^8.0.0
+  image_picker: ^1.1.0
+  url_launcher: ^6.2.6
+  shared_preferences: ^2.2.3
+  app_links: ^7.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+# supabase_flutter pulls in app_links transitively (for OAuth/magic-link
+# deep-link handling). Without this override, pub can resolve an old
+# app_links version that never shipped its Windows native implementation,
+# which breaks `flutter build windows` with a missing
+# app_links_plugin_c_api.h. Forcing a version confirmed to include the
+# fixed Windows setup.
+dependency_overrides:
+  app_links: ^7.2.1
+
+flutter:
+  uses-material-design: true

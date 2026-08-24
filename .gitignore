@@ -1,0 +1,33 @@
+# --- Secrets: never commit real keys ---
+env.json
+*.env
+.env
+
+# --- Flutter/Dart ---
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/pubspec.lock
+
+# --- Windows desktop: generated fresh by `flutter create --platforms=windows .`
+# (see README) — never hand-author or commit this, it must match the actual
+# Flutter SDK doing the build.
+windows/
+
+# --- IDE ---
+.idea/
+.vscode/
+*.iml
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Installer output ---
+installer/Output/
+*.zip
+!campusx-windows-*.zip
