@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/avatar_view.dart';
 import '../../../core/widgets/glass_button.dart';
 import '../../../core/widgets/glass_container.dart';
+import '../../../core/widgets/glass_text_field.dart';
 import '../../../core/widgets/toast_overlay.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/feed_provider.dart';
@@ -168,7 +169,6 @@ class _CreatePostCardState extends State<CreatePostCard> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final auth = context.watch<AuthProvider>();
     final profile = auth.profile;
 
@@ -206,24 +206,11 @@ class _CreatePostCardState extends State<CreatePostCard> {
                 ),
               const SizedBox(width: 12),
               Expanded(
-                child: TextField(
+                child: GlassTextField(
                   controller: _textController,
+                  hintText: placeholder,
                   maxLines: 3,
                   minLines: 1,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isDark ? AppColors.darkInk100 : AppColors.lightInk100,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: placeholder,
-                    hintStyle: TextStyle(
-                      fontSize: 14,
-                      color: isDark ? AppColors.darkInk500 : AppColors.lightInk500,
-                    ),
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
                 ),
               ),
             ],
