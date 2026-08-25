@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../core/sync/sync_queue_service.dart';
 import '../models/post_model.dart';
 import '../models/comment_model.dart';
 import 'supabase_service.dart';
@@ -191,5 +192,90 @@ class PostService {
         .single();
 
     return CommentModel.fromJson(data);
+  }
+
+  // ---------------------------------------------------------------------
+  // Offline-first additions below. Nothing above this line was changed -
+  // existing callers of createPost/addComment behave exactly as before.
+  // ---------------------------------------------------------------------
+
+  /// Builds a local-only, instantly-displayable PostModel (isPending: true)
+  /// and queues the real write for SyncQueueService to replay when online.
+  ///
+  /// NOTE ON IMAGES: this deliberately does NOT put [localImagePaths] into
+  /// the returned PostModel.imageUrls - that field is rendered elsewhere
+  /// (presumably with CachedNetworkImage in post_card.dart) and a local
+  /// file path would break that widget. Until I've seen post_card.dart,
+  /// treat pending-post images as a follow-up: the queue item still carries
+  /// localImagePaths so the sync handler can upload them once we wire it,
+  /// but the UI needs its own "show local file for pending posts" branch.
+  PostModel buildPendingPost({
+    required String authorId,
+    required String content,
+    List<String> localImagePaths = const [],
+    bool isConfession = false,
+    String? clubId,
+  }) {
+    final localId = SyncQueueService.instance.newLocalId();
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
+    final pendingPost = PostModel(
+      id: localId,
+      authorId: authorId,
+      content: content,
+      videoUrl: null,
+      isConfession: isConfession,
+      clubId: clubId,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      isPending: true,
+    );
+
+    SyncQueueService.instance.enqueue(
+      id: localId,
+      entityType: 'post',
+      opType: 'create',
+      payload: {
+        'author_id': authorId,
+        'content': content,
+        'is_confession': isConfession,
+        'club_id': clubId,
+      },
+      localImagePaths: localImagePaths,
+    );
+
+    return pendingPost;
+  }
+
+  /// Same idea for comments - instant local CommentModel, queued write.
+  CommentModel buildPendingComment({
+    required String postId,
+    required String authorId,
+    required String content,
+  }) {
+    final localId = SyncQueueService.instance.newLocalId();
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
+    final pendingComment = CommentModel(
+      id: localId,
+      postId: postId,
+      authorId: authorId,
+      content: content,
+      createdAt: nowIso,
+      isPending: true,
+    );
+
+    SyncQueueService.instance.enqueue(
+      id: localId,
+      entityType: 'comment',
+      opType: 'create',
+      payload: {
+        'post_id': postId,
+        'author_id': authorId,
+        'content': content,
+      },
+    );
+
+    return pendingComment;
   }
 }
