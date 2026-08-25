@@ -33,6 +33,7 @@ dependencies:
   url_launcher: ^6.2.6
   shared_preferences: ^2.2.3
   app_links: ^7.2.1
+  emoji_picker_flutter: ^4.3.0
 
 dev_dependencies:
   flutter_test:
