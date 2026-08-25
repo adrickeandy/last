@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../core/sync/sync_queue_service.dart';
 import '../models/conversation_model.dart';
 import '../models/message_model.dart';
 import '../models/profile_model.dart';
@@ -145,5 +146,45 @@ class MessageService {
 
   Future<void> unsubscribe(RealtimeChannel channel) async {
     await _client.removeChannel(channel);
+  }
+
+  // ---------------------------------------------------------------------
+  // Offline-first addition below. Nothing above this line was changed -
+  // existing callers of sendMessage behave exactly as before.
+  // ---------------------------------------------------------------------
+
+  /// Instant local MessageModel (isPending: true) + queued write for
+  /// SyncQueueService to replay when online. Ordering is preserved by the
+  /// queue processing items in createdAt order, so messages in a thread
+  /// sync in the order they were sent even if several went out offline.
+  MessageModel buildPendingMessage({
+    required String conversationId,
+    required String senderId,
+    required String content,
+  }) {
+    final localId = SyncQueueService.instance.newLocalId();
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
+    final pendingMessage = MessageModel(
+      id: localId,
+      conversationId: conversationId,
+      senderId: senderId,
+      content: content,
+      createdAt: nowIso,
+      isPending: true,
+    );
+
+    SyncQueueService.instance.enqueue(
+      id: localId,
+      entityType: 'message',
+      opType: 'create',
+      payload: {
+        'conversation_id': conversationId,
+        'sender_id': senderId,
+        'content': content,
+      },
+    );
+
+    return pendingMessage;
   }
 }
