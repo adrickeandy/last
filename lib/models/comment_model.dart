@@ -7,6 +7,10 @@ class CommentModel {
   final String content;
   final String createdAt;
   final ProfileModel? author;
+  // Same convention as PostModel.isPending: true only for comments created
+  // locally that haven't been confirmed by the server yet. Never comes from
+  // Supabase itself - defaults to false so nothing existing breaks.
+  final bool isPending;
 
   CommentModel({
     required this.id,
@@ -15,6 +19,7 @@ class CommentModel {
     required this.content,
     required this.createdAt,
     this.author,
+    this.isPending = false,
   });
 
   factory CommentModel.fromJson(Map<String, dynamic> json) {
@@ -22,7 +27,6 @@ class CommentModel {
     if (json['profiles'] != null && json['profiles'] is Map<String, dynamic>) {
       authorProfile = ProfileModel.fromJson(json['profiles'] as Map<String, dynamic>);
     }
-
     return CommentModel(
       id: json['id'] as String? ?? '',
       postId: json['post_id'] as String? ?? '',
@@ -30,6 +34,22 @@ class CommentModel {
       content: json['content'] as String? ?? '',
       createdAt: json['created_at'] as String? ?? '',
       author: authorProfile,
+    );
+  }
+
+  CommentModel copyWith({
+    String? content,
+    ProfileModel? author,
+    bool? isPending,
+  }) {
+    return CommentModel(
+      id: id,
+      postId: postId,
+      authorId: authorId,
+      content: content ?? this.content,
+      createdAt: createdAt,
+      author: author ?? this.author,
+      isPending: isPending ?? this.isPending,
     );
   }
 }
