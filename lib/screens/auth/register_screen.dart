@@ -140,7 +140,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     GlassTextField(
                       controller: _usernameController,
                       labelText: 'Username',
-                      hintText: 'alex_campus',
+                      hintText: 'john_legend',
                       validator: AppValidators.validateUsername,
                     ),
                     const SizedBox(height: 16),
@@ -184,20 +184,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                     GlassTextField(
                       controller: _emailController,
-                      labelText: 'University Email',
-                      hintText: 'you@university.edu',
+                      labelText: 'Your Email',
+                      hintText: 'johnlegend@gmail.com',
                       keyboardType: TextInputType.emailAddress,
                       validator: AppValidators.validateEmail,
                     ),
                     const SizedBox(height: 16),
 
-                    GlassTextField(
-                      controller: _passwordController,
-                      labelText: 'Password',
-                      hintText: '••••••••',
-                      obscureText: true,
-                      validator: AppValidators.validatePassword,
-                      onSubmitted: (_) => _handleRegister(),
+                   GlassTextField(
+                     controller: _passwordController,
+                     labelText: 'Password',
+                     hintText: '********',
+                     isPassword: true,          // ← swap in for obscureText: true
+                     validator: AppValidators.validatePassword,
+                     onSubmitted: (_) => _handleLogin(),
                     ),
                     const SizedBox(height: 20),
 
