@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/avatar_view.dart';
-import '../../../core/widgets/glass_container.dart';
+import '../../../core/widgets/glass_text_field.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../core/widgets/toast_overlay.dart';
 import '../../../models/comment_model.dart';
@@ -189,6 +189,7 @@ class _CommentSectionWidgetState extends State<CommentSectionWidget> {
 
           // Add Comment Input
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               AvatarView(
                 url: profile?.avatarUrl,
@@ -197,32 +198,9 @@ class _CommentSectionWidgetState extends State<CommentSectionWidget> {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: TextField(
+                child: GlassTextField(
                   controller: _commentController,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Write a comment…',
-                    hintStyle: TextStyle(
-                      fontSize: 13,
-                      color: isDark ? AppColors.darkInk500 : AppColors.lightInk500,
-                    ),
-                    filled: true,
-                    fillColor: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: isDark ? AppColors.darkGlassBorder : AppColors.lightGlassBorder,
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: isDark ? AppColors.darkGlassBorder : AppColors.lightGlassBorder,
-                      ),
-                    ),
-                  ),
+                  hintText: 'Write a comment…',
                   onSubmitted: (_) => _handleAddComment(),
                 ),
               ),
