@@ -7,6 +7,8 @@ import '../../core/widgets/skeleton_loader.dart';
 import '../../core/widgets/toast_overlay.dart';
 import '../../models/club_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/chat_provider.dart';
+import '../../providers/ui_provider.dart';
 import '../../services/club_service.dart';
 import 'widgets/create_club_dialog.dart';
 
@@ -63,19 +65,48 @@ class _ClubsScreenState extends State<ClubsScreen> {
 
     try {
       if (isJoined) {
-        await _clubService.leaveClub(club.id, user.id);
-        ToastOverlay.show(context, 'Left ${club.name}', type: ToastType.info);
+        await _clubService.leaveClub(club.id, user.id, conversationId: club.conversationId);
+        if (mounted) ToastOverlay.show(context, 'Left ${club.name}', type: ToastType.info);
       } else {
-        await _clubService.joinClub(club.id, user.id);
-        ToastOverlay.show(context, 'Joined ${club.name}!', type: ToastType.success);
+        await _clubService.joinClub(club.id, user.id, conversationId: club.conversationId);
+        if (mounted) ToastOverlay.show(context, 'Joined ${club.name}!', type: ToastType.success);
       }
     } catch (e) {
       // Revert on error
-      setState(() {
-        final index = _clubs.indexWhere((c) => c.id == club.id);
-        if (index != -1) _clubs[index] = club;
-      });
-      ToastOverlay.show(context, 'Could not update membership', type: ToastType.error);
+      if (mounted) {
+        setState(() {
+          final index = _clubs.indexWhere((c) => c.id == club.id);
+          if (index != -1) _clubs[index] = club;
+        });
+        ToastOverlay.show(context, 'Could not update membership', type: ToastType.error);
+      }
+    }
+  }
+
+  Future<void> _openClubChat(ClubModel club) async {
+    if (club.conversationId == null) {
+      ToastOverlay.show(
+        context,
+        'This club has no group chat yet.',
+        type: ToastType.info,
+      );
+      return;
+    }
+
+    final chat = context.read<ChatProvider>();
+    final ui = context.read<UIProvider>();
+    final user = context.read<AuthProvider>().user;
+
+    try {
+      if (user != null) {
+        await chat.loadConversations(user.id);
+      }
+      await chat.selectConversation(club.conversationId!);
+      if (mounted) ui.setTab(AppTab.messages);
+    } catch (e) {
+      if (mounted) {
+        ToastOverlay.show(context, 'Could not open group chat: $e', type: ToastType.error);
+      }
     }
   }
 
@@ -170,7 +201,7 @@ class _ClubsScreenState extends State<ClubsScreen> {
                     crossAxisCount: 2,
                     crossAxisSpacing: 16,
                     mainAxisSpacing: 16,
-                    childAspectRatio: 1.45,
+                    childAspectRatio: 1.3,
                   ),
                   itemCount: _clubs.length,
                   itemBuilder: (context, i) {
@@ -234,6 +265,17 @@ class _ClubsScreenState extends State<ClubsScreen> {
                             text: club.isMember ? 'Joined' : 'Join Club',
                             onPressed: () => _toggleJoin(club),
                           ),
+                          if (club.isMember) ...[
+                            const SizedBox(height: 8),
+                            GlassButton(
+                              width: double.infinity,
+                              height: 36,
+                              variant: GlassButtonVariant.secondary,
+                              text: 'Group chat',
+                              icon: Icons.chat_bubble_outline_rounded,
+                              onPressed: () => _openClubChat(club),
+                            ),
+                          ],
                         ],
                       ),
                     );
