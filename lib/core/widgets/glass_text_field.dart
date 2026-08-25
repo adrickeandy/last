@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
-class GlassTextField extends StatelessWidget {
+class GlassTextField extends StatefulWidget {
   final TextEditingController? controller;
   final String? hintText;
   final String? labelText;
   final Widget? prefixIcon;
   final Widget? suffixIcon;
   final bool obscureText;
+  // Set this to true for password fields instead of obscureText. It adds a
+  // built-in eye icon that toggles visibility, and manages the obscure
+  // state internally so callers don't need their own show/hide bool.
+  final bool isPassword;
   final TextInputType? keyboardType;
   final int? maxLines;
   final int? minLines;
@@ -26,6 +30,7 @@ class GlassTextField extends StatelessWidget {
     this.prefixIcon,
     this.suffixIcon,
     this.obscureText = false,
+    this.isPassword = false,
     this.keyboardType,
     this.maxLines = 1,
     this.minLines,
@@ -38,16 +43,39 @@ class GlassTextField extends StatelessWidget {
   });
 
   @override
+  State<GlassTextField> createState() => _GlassTextFieldState();
+}
+
+class _GlassTextFieldState extends State<GlassTextField> {
+  // Password fields start obscured. Plain obscureText fields (isPassword
+  // false) just use whatever the caller passed and can't be toggled, same
+  // as before.
+  late bool _obscure = widget.isPassword ? true : widget.obscureText;
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final effectiveSuffixIcon = widget.isPassword
+        ? IconButton(
+            icon: Icon(
+              _obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+              size: 19,
+              color: isDark ? AppColors.darkInk400 : AppColors.lightInk400,
+            ),
+            splashRadius: 18,
+            tooltip: _obscure ? 'Show password' : 'Hide password',
+            onPressed: () => setState(() => _obscure = !_obscure),
+          )
+        : widget.suffixIcon;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (labelText != null) ...[
+        if (widget.labelText != null) ...[
           Text(
-            labelText!,
+            widget.labelText!,
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
@@ -57,29 +85,29 @@ class GlassTextField extends StatelessWidget {
           const SizedBox(height: 6),
         ],
         TextFormField(
-          controller: controller,
-          obscureText: obscureText,
-          keyboardType: keyboardType,
-          maxLines: obscureText ? 1 : maxLines,
-          minLines: minLines,
-          onChanged: onChanged,
-          onFieldSubmitted: onSubmitted,
-          validator: validator,
-          enabled: enabled,
-          autofocus: autofocus,
-          focusNode: focusNode,
+          controller: widget.controller,
+          obscureText: _obscure,
+          keyboardType: widget.keyboardType,
+          maxLines: _obscure ? 1 : widget.maxLines,
+          minLines: widget.minLines,
+          onChanged: widget.onChanged,
+          onFieldSubmitted: widget.onSubmitted,
+          validator: widget.validator,
+          enabled: widget.enabled,
+          autofocus: widget.autofocus,
+          focusNode: widget.focusNode,
           style: TextStyle(
             color: isDark ? AppColors.darkInk100 : AppColors.lightInk100,
             fontSize: 14,
           ),
           decoration: InputDecoration(
-            hintText: hintText,
+            hintText: widget.hintText,
             hintStyle: TextStyle(
               color: isDark ? AppColors.darkInk500 : AppColors.lightInk500,
               fontSize: 14,
             ),
-            prefixIcon: prefixIcon,
-            suffixIcon: suffixIcon,
+            prefixIcon: widget.prefixIcon,
+            suffixIcon: effectiveSuffixIcon,
             filled: true,
             fillColor: isDark
                 ? Colors.white.withOpacity(0.04)
