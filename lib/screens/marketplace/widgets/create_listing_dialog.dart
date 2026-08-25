@@ -54,7 +54,7 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
 
   static const int _maxImages = 6;
 
-  final categories = [
+  final List<String> categories = [
     'Books',
     'Electronics',
     'Clothing',
@@ -80,7 +80,9 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
       return;
     }
 
-    setState(() => _isPickingImages = true);
+    setState(() {
+      _isPickingImages = true;
+    });
 
     try {
       final remaining = _maxImages - _selectedImages.length;
@@ -97,11 +99,15 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
 
       final newImages = images.take(remaining).toList();
 
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
         _selectedImages.addAll(newImages);
       });
 
-      if (images.length > remaining && mounted) {
+      if (images.length > remaining) {
         ToastOverlay.show(
           context,
           'Only $_maxImages photos can be added',
@@ -120,7 +126,9 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isPickingImages = false);
+        setState(() {
+          _isPickingImages = false;
+        });
       }
     }
   }
@@ -143,7 +151,7 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
         maxHeight: 1600,
       );
 
-      if (image == null) {
+      if (image == null || !mounted) {
         return;
       }
 
@@ -164,13 +172,17 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
   }
 
   void _removeImage(int index) {
+    if (index < 0 || index >= _selectedImages.length) {
+      return;
+    }
+
     setState(() {
       _selectedImages.removeAt(index);
     });
   }
 
   void _showImageSourcePicker() {
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
@@ -259,10 +271,13 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
-      final item = await _marketplaceService.createListingWithImages(
+      final item =
+          await _marketplaceService.createListingWithImages(
         sellerId: user.id,
         title: _titleController.text.trim(),
         description: _descController.text.trim(),
@@ -296,7 +311,9 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -328,10 +345,11 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
           ],
         ),
         const SizedBox(height: 8),
-
         if (_selectedImages.isEmpty)
           InkWell(
-            onTap: _isPickingImages ? null : _showImageSourcePicker,
+            onTap: _isPickingImages
+                ? null
+                : _showImageSourcePicker,
             borderRadius: BorderRadius.circular(16),
             child: Container(
               width: double.infinity,
@@ -350,7 +368,8 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
                       child: CircularProgressIndicator(),
                     )
                   : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisAlignment:
+                          MainAxisAlignment.center,
                       children: [
                         Icon(
                           Icons.add_photo_alternate_outlined,
@@ -389,7 +408,9 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: _selectedImages.length +
-                      (_selectedImages.length < _maxImages ? 1 : 0),
+                      (_selectedImages.length < _maxImages
+                          ? 1
+                          : 0),
                   separatorBuilder: (_, __) =>
                       const SizedBox(width: 10),
                   itemBuilder: (context, index) {
@@ -408,7 +429,7 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Add clear photos showing the item's condition.',
+                  "Add clear photos showing the item's condition.",
                   style: TextStyle(
                     fontSize: 11,
                     color: Theme.of(context)
@@ -500,7 +521,6 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
             },
           ),
         ),
-
         Positioned(
           top: 5,
           right: 5,
@@ -521,7 +541,6 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
             ),
           ),
         ),
-
         if (index == 0)
           Positioned(
             bottom: 5,
@@ -565,7 +584,8 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
                   Row(
                     mainAxisAlignment:
@@ -584,17 +604,14 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
                         ),
                         onPressed: _isLoading
                             ? null
-                            : () => Navigator.of(context).pop(),
+                            : () =>
+                                Navigator.of(context).pop(),
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 16),
-
                   _buildImagePicker(),
-
                   const SizedBox(height: 18),
-
                   GlassTextField(
                     controller: _titleController,
                     labelText: 'Item Title',
@@ -606,9 +623,7 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
                       'Title',
                     ),
                   ),
-
                   const SizedBox(height: 14),
-
                   Row(
                     crossAxisAlignment:
                         CrossAxisAlignment.start,
@@ -629,9 +644,7 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
                           ),
                         ),
                       ),
-
                       const SizedBox(width: 12),
-
                       Expanded(
                         child: Column(
                           crossAxisAlignment:
@@ -646,7 +659,7 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
                             ),
                             const SizedBox(height: 6),
                             DropdownButtonFormField<String>(
-                              value: _selectedCategory,
+                              initialValue: _selectedCategory,
                               decoration: InputDecoration(
                                 contentPadding:
                                     const EdgeInsets.symmetric(
@@ -663,28 +676,27 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
                                       BorderRadius.circular(14),
                                 ),
                               ),
-                              items: categories
-                                  .map(
-                                    (c) => DropdownMenuItem(
-                                      value: c,
-                                      child: Text(
-                                        c,
-                                        style:
-                                            const TextStyle(
-                                          fontSize: 13,
-                                        ),
+                              items: categories.map(
+                                (category) {
+                                  return DropdownMenuItem<String>(
+                                    value: category,
+                                    child: Text(
+                                      category,
+                                      style:
+                                          const TextStyle(
+                                        fontSize: 13,
                                       ),
                                     ),
-                                  )
-                                  .toList(),
+                                  );
+                                },
+                              ).toList(),
                               onChanged: _isLoading
                                   ? null
-                                  : (v) {
-                                      setState(
-                                        () =>
-                                            _selectedCategory =
-                                                v ?? 'Books',
-                                      );
+                                  : (value) {
+                                      setState(() {
+                                        _selectedCategory =
+                                            value ?? 'Books';
+                                      });
                                     },
                             ),
                           ],
@@ -692,9 +704,7 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 14),
-
                   GlassTextField(
                     controller: _descController,
                     labelText: 'Description & Condition',
@@ -702,9 +712,7 @@ class _CreateListingDialogState extends State<CreateListingDialog> {
                         'Good condition, no missing pages, pickup on main campus.',
                     maxLines: 3,
                   ),
-
                   const SizedBox(height: 24),
-
                   GlassButton(
                     width: double.infinity,
                     height: 44,
