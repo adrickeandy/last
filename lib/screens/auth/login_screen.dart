@@ -122,13 +122,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    GlassTextField(
-                      controller: _passwordController,
-                      labelText: 'Password',
-                      hintText: '••••••••',
-                      obscureText: true,
-                      validator: AppValidators.validatePassword,
-                      onSubmitted: (_) => _handleLogin(),
+                   GlassTextField(
+                     controller: _passwordController,
+                     labelText: 'Password',
+                     hintText: '******',
+                     isPassword: true,          // ← swap in for obscureText: true
+                     validator: AppValidators.validatePassword,
+                     onSubmitted: (_) => _handleLogin(),
                     ),
                     const SizedBox(height: 20),
 
