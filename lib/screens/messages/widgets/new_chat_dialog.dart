@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/avatar_view.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../../core/widgets/glass_text_field.dart';
 import '../../../core/widgets/skeleton_loader.dart';
-import '../../../core/widgets/toast_overlay.dart';
 import '../../../models/profile_model.dart';
-import '../../../providers/auth_provider.dart';
-import '../../../providers/chat_provider.dart';
-import '../../../providers/ui_provider.dart';
 import '../../../services/profile_service.dart';
 
 class NewChatDialog extends StatefulWidget {
   const NewChatDialog({super.key});
 
-  static Future<void> show(BuildContext context) async {
-    await showDialog(
+  /// Returns the selected profile, or null if dismissed without picking
+  /// anyone. This dialog no longer starts the chat itself -- it only lets
+  /// the caller pick a person. The caller (a screen, not this dialog) must
+  /// do the actual network call, because this dialog's State is destroyed
+  /// the instant it's popped, which was silently swallowing errors before.
+  static Future<ProfileModel?> show(BuildContext context) {
+    return showDialog<ProfileModel>(
       context: context,
       builder: (ctx) => const NewChatDialog(),
     );
@@ -46,39 +46,12 @@ class _NewChatDialogState extends State<NewChatDialog> {
 
     setState(() => _isLoading = true);
     final results = await _profileService.searchProfiles(query);
-    final myId = context.read<AuthProvider>().user?.id;
 
     if (mounted) {
       setState(() {
-        _searchResults = results.where((p) => p.id != myId).toList();
+        _searchResults = results;
         _isLoading = false;
       });
-    }
-  }
-
-  Future<void> _startChatWith(ProfileModel other) async {
-    final auth = context.read<AuthProvider>();
-    final user = auth.user;
-    if (user == null) return;
-
-    final chat = context.read<ChatProvider>();
-    final ui = context.read<UIProvider>();
-
-    Navigator.of(context).pop();
-
-    try {
-      await chat.startOrGetDirectChat(user.id, other.id);
-      ui.setTab(AppTab.messages);
-    } catch (e) {
-      // This is the important bit: instead of silently dying and just
-      // dropping you back on the previous screen, show exactly what broke.
-      if (mounted) {
-        ToastOverlay.show(
-          context,
-          'Could not start chat: $e',
-          type: ToastType.error,
-        );
-      }
     }
   }
 
@@ -168,7 +141,9 @@ class _NewChatDialogState extends State<NewChatDialog> {
                                     color: isDark ? AppColors.darkInk400 : AppColors.lightInk400,
                                   ),
                                 ),
-                                onTap: () => _startChatWith(p),
+                                // Pop with the picked profile only. The
+                                // caller does the actual chat-start call.
+                                onTap: () => Navigator.of(context).pop(p),
                               );
                             },
                           ),
