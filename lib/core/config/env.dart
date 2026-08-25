@@ -75,8 +75,13 @@ class AppEnv {
     defaultValue: 'gemini-3.5-flash-lite',
   );
 
+  // NOTE: this used to end in "/models" for the old
+  // models/{model}:streamGenerateContent endpoint. The service now targets
+  // the current Interactions API at "/v1beta/interactions" (model is a body
+  // field there, not part of the path), so the trailing "/models" segment
+  // was removed — leaving it in would silently 404/misroute every request.
   static const String geminiBaseUrl =
-      'https://generativelanguage.googleapis.com/v1beta/models';
+      'https://generativelanguage.googleapis.com/v1beta';
 
   /// Thinking level for Gemini 3.x models: 'low' keeps Pegasus fast and
   /// cheap for everyday chat; raise to 'medium'/'high' later for tasks that
