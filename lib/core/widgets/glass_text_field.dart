@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import '../theme/app_colors.dart';
 
 class GlassTextField extends StatefulWidget {
@@ -8,10 +9,17 @@ class GlassTextField extends StatefulWidget {
   final Widget? prefixIcon;
   final Widget? suffixIcon;
   final bool obscureText;
-  // Set this to true for password fields instead of obscureText. It adds a
-  // built-in eye icon that toggles visibility, and manages the obscure
-  // state internally so callers don't need their own show/hide bool.
+  // Set true for password fields instead of obscureText. Adds a built-in
+  // eye icon that toggles visibility and manages the obscure state
+  // internally. Password fields never show the emoji picker, regardless
+  // of showEmojiPicker below.
   final bool isPassword;
+  // Adds a built-in emoji-picker button that inserts the picked emoji at
+  // the current cursor position. Defaults to on for every field; set to
+  // false to opt a specific field out (e.g. numeric-only inputs). Has no
+  // effect if `controller` is null, since insertion needs a controller to
+  // read/write cursor position, or if `isPassword` is true.
+  final bool showEmojiPicker;
   final TextInputType? keyboardType;
   final int? maxLines;
   final int? minLines;
@@ -31,6 +39,7 @@ class GlassTextField extends StatefulWidget {
     this.suffixIcon,
     this.obscureText = false,
     this.isPassword = false,
+    this.showEmojiPicker = true,
     this.keyboardType,
     this.maxLines = 1,
     this.minLines,
@@ -52,22 +61,92 @@ class _GlassTextFieldState extends State<GlassTextField> {
   // as before.
   late bool _obscure = widget.isPassword ? true : widget.obscureText;
 
+  bool get _emojiEnabled =>
+      widget.showEmojiPicker && !widget.isPassword && widget.controller != null;
+
+  void _openEmojiPicker() {
+    final controller = widget.controller;
+    if (controller == null) return;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return SafeArea(
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkBg800 : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: EmojiPicker(
+              textEditingController: controller,
+              onEmojiSelected: (category, emoji) {
+                // textEditingController above already handles inserting the
+                // emoji at the cursor position for us; just propagate the
+                // change to the caller's onChanged like normal typing would.
+                widget.onChanged?.call(controller.text);
+              },
+              config: Config(
+                height: 320,
+                emojiViewConfig: EmojiViewConfig(
+                  backgroundColor: isDark ? AppColors.darkBg800 : Colors.white,
+                ),
+                categoryViewConfig: CategoryViewConfig(
+                  backgroundColor: isDark ? AppColors.darkBg800 : Colors.white,
+                  iconColorSelected: AppColors.violet500,
+                  indicatorColor: AppColors.violet500,
+                ),
+                bottomActionBarConfig: const BottomActionBarConfig(
+                  backgroundColor: Colors.transparent,
+                ),
+                searchViewConfig: SearchViewConfig(
+                  backgroundColor: isDark ? AppColors.darkBg800 : Colors.white,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final effectiveSuffixIcon = widget.isPassword
-        ? IconButton(
-            icon: Icon(
-              _obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-              size: 19,
-              color: isDark ? AppColors.darkInk400 : AppColors.lightInk400,
+    Widget? effectiveSuffixIcon;
+    if (widget.isPassword) {
+      effectiveSuffixIcon = IconButton(
+        icon: Icon(
+          _obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+          size: 19,
+          color: isDark ? AppColors.darkInk400 : AppColors.lightInk400,
+        ),
+        splashRadius: 18,
+        tooltip: _obscure ? 'Show password' : 'Hide password',
+        onPressed: () => setState(() => _obscure = !_obscure),
+      );
+    } else if (_emojiEnabled || widget.suffixIcon != null) {
+      effectiveSuffixIcon = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.suffixIcon != null) widget.suffixIcon!,
+          if (_emojiEnabled)
+            IconButton(
+              icon: Icon(
+                Icons.emoji_emotions_outlined,
+                size: 19,
+                color: isDark ? AppColors.darkInk400 : AppColors.lightInk400,
+              ),
+              splashRadius: 18,
+              tooltip: 'Insert emoji',
+              onPressed: _openEmojiPicker,
             ),
-            splashRadius: 18,
-            tooltip: _obscure ? 'Show password' : 'Hide password',
-            onPressed: () => setState(() => _obscure = !_obscure),
-          )
-        : widget.suffixIcon;
+        ],
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
