@@ -115,8 +115,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     // Inputs
                     GlassTextField(
                       controller: _emailController,
-                      labelText: 'Email',
-                      hintText: 'you@university.edu',
+                      labelText: 'Your Email',
+                      hintText: 'goldboy@gmail.com',
                       keyboardType: TextInputType.emailAddress,
                       validator: AppValidators.validateEmail,
                     ),
@@ -125,7 +125,7 @@ class _LoginScreenState extends State<LoginScreen> {
                    GlassTextField(
                      controller: _passwordController,
                      labelText: 'Password',
-                     hintText: '******',
+                     hintText: '********',
                      isPassword: true,          // ← swap in for obscureText: true
                      validator: AppValidators.validatePassword,
                      onSubmitted: (_) => _handleLogin(),
