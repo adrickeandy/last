@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/avatar_view.dart';
+import '../../../core/widgets/glass_text_field.dart';
 import '../../../core/widgets/skeleton_loader.dart';
 import '../../../models/conversation_model.dart';
 import '../../../providers/auth_provider.dart';
@@ -162,34 +163,12 @@ class _ChatThreadState extends State<ChatThread> {
             ),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: TextField(
+                child: GlassTextField(
                   controller: _messageController,
-                  style: const TextStyle(fontSize: 13.5),
-                  decoration: InputDecoration(
-                    hintText: 'Type a message…',
-                    hintStyle: TextStyle(
-                      fontSize: 13.5,
-                      color: isDark ? AppColors.darkInk500 : AppColors.lightInk500,
-                    ),
-                    filled: true,
-                    fillColor: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                        color: isDark ? AppColors.darkGlassBorder : AppColors.lightGlassBorder,
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                        color: isDark ? AppColors.darkGlassBorder : AppColors.lightGlassBorder,
-                      ),
-                    ),
-                  ),
+                  hintText: 'Type a message…',
                   onSubmitted: (_) => _handleSend(),
                 ),
               ),
