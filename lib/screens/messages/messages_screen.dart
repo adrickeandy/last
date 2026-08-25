@@ -5,6 +5,8 @@ import '../../core/widgets/avatar_view.dart';
 import '../../core/widgets/glass_button.dart';
 import '../../core/widgets/glass_container.dart';
 import '../../core/widgets/skeleton_loader.dart';
+import '../../core/widgets/toast_overlay.dart';
+import '../../models/profile_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/chat_provider.dart';
 import 'widgets/chat_thread.dart';
@@ -27,6 +29,34 @@ class _MessagesScreenState extends State<MessagesScreen> {
         context.read<ChatProvider>().loadConversations(user.id);
       }
     });
+  }
+
+  // The dialog only returns who was picked. This screen (which stays
+  // mounted, unlike the dialog it just closed) does the real network call
+  // and can safely show a toast if it fails.
+  Future<void> _openNewChatDialog() async {
+    final selected = await NewChatDialog.show(context);
+    if (selected == null) return;
+    await _startChatWith(selected);
+  }
+
+  Future<void> _startChatWith(ProfileModel other) async {
+    final user = context.read<AuthProvider>().user;
+    if (user == null) return;
+
+    final chat = context.read<ChatProvider>();
+
+    try {
+      await chat.startOrGetDirectChat(user.id, other.id);
+    } catch (e) {
+      if (mounted) {
+        ToastOverlay.show(
+          context,
+          'Could not start chat: $e',
+          type: ToastType.error,
+        );
+      }
+    }
   }
 
   @override
@@ -71,7 +101,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             IconButton(
                               tooltip: 'New message',
                               icon: const Icon(Icons.edit_note_rounded, size: 22),
-                              onPressed: () => NewChatDialog.show(context),
+                              onPressed: _openNewChatDialog,
                             ),
                           ],
                         ),
@@ -112,7 +142,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                             variant: GlassButtonVariant.secondary,
                                             text: 'Start chat',
                                             height: 34,
-                                            onPressed: () => NewChatDialog.show(context),
+                                            onPressed: _openNewChatDialog,
                                           ),
                                         ],
                                       ),
@@ -209,7 +239,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                 variant: GlassButtonVariant.primary,
                                 text: 'New message',
                                 icon: Icons.edit_note_rounded,
-                                onPressed: () => NewChatDialog.show(context),
+                                onPressed: _openNewChatDialog,
                               ),
                             ],
                           ),
