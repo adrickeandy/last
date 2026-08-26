@@ -24,6 +24,7 @@ class PostCard extends StatefulWidget {
 
 class _PostCardState extends State<PostCard> {
   bool _showComments = false;
+  bool _isRetrying = false;
 
   void _handleLike() {
     final auth = context.read<AuthProvider>();
@@ -35,6 +36,19 @@ class _PostCardState extends State<PostCard> {
 
     final feed = context.read<FeedProvider>();
     feed.toggleLike(widget.post.id, user.id);
+  }
+
+  Future<void> _handleRetry() async {
+    if (_isRetrying) return;
+    setState(() => _isRetrying = true);
+    final feed = context.read<FeedProvider>();
+    final ok = await feed.retryPost(widget.post.id);
+    if (mounted) {
+      setState(() => _isRetrying = false);
+      if (!ok) {
+        ToastOverlay.show(context, 'Still no connection - will retry again', type: ToastType.info);
+      }
+    }
   }
 
   void _handleDelete() {
@@ -145,33 +159,42 @@ class _PostCardState extends State<PostCard> {
                         ),
                         if (post.isPending) ...[
                           const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.lime500.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(
-                                  width: 8,
-                                  height: 8,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 1.5,
-                                    color: AppColors.lime500,
+                          // Tappable: forces an immediate retry instead of
+                          // waiting for the next automatic loadFeed() pass.
+                          InkWell(
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: _handleRetry,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.lime500.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (_isRetrying)
+                                    SizedBox(
+                                      width: 8,
+                                      height: 8,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 1.5,
+                                        color: AppColors.lime500,
+                                      ),
+                                    )
+                                  else
+                                    Icon(Icons.refresh_rounded, size: 10, color: AppColors.lime500),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _isRetrying ? 'Sending…' : 'Not sent · tap to retry',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.lime500,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Sending…',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.lime500,
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ],
