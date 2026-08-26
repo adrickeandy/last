@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/glass_button.dart';
@@ -34,12 +37,48 @@ class _CreateEventDialogState extends State<CreateEventDialog> {
   DateTime _startsAt = DateTime.now().add(const Duration(days: 1));
   bool _isLoading = false;
 
+  // Cover image: keep the picked XFile (needed for upload) alongside its
+  // bytes (needed for an immediate preview, cross-platform - Image.file
+  // doesn't work on web/some desktop setups, Image.memory always does).
+  XFile? _coverImage;
+  Uint8List? _coverPreviewBytes;
+  bool _isPickingImage = false;
+
   @override
   void dispose() {
     _titleController.dispose();
     _descController.dispose();
     _locationController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickCoverImage() async {
+    setState(() => _isPickingImage = true);
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      if (mounted) {
+        setState(() {
+          _coverImage = picked;
+          _coverPreviewBytes = bytes;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ToastOverlay.show(context, 'Could not open image picker', type: ToastType.error);
+      }
+    } finally {
+      if (mounted) setState(() => _isPickingImage = false);
+    }
+  }
+
+  void _removeCoverImage() {
+    setState(() {
+      _coverImage = null;
+      _coverPreviewBytes = null;
+    });
   }
 
   Future<void> _pickDateTime() async {
@@ -83,12 +122,13 @@ class _CreateEventDialogState extends State<CreateEventDialog> {
     setState(() => _isLoading = true);
 
     try {
-      final event = await _eventService.createEvent(
+      final event = await _eventService.createEventWithCover(
         hostId: user.id,
         title: _titleController.text.trim(),
         description: _descController.text.trim(),
         location: _locationController.text.trim(),
         startsAt: _startsAt.toUtc().toIso8601String(),
+        coverImage: _coverImage,
       );
 
       if (mounted) {
@@ -117,89 +157,159 @@ class _CreateEventDialogState extends State<CreateEventDialog> {
           padding: const EdgeInsets.all(24),
           child: Form(
             key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Host an Event', style: Theme.of(context).textTheme.titleMedium),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 20),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Host an Event', style: Theme.of(context).textTheme.titleMedium),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
 
-                GlassTextField(
-                  controller: _titleController,
-                  labelText: 'Event Title',
-                  hintText: 'e.g. Annual Campus Hackathon',
-                  validator: (v) => AppValidators.validateRequired(v, 'Title'),
-                ),
-                const SizedBox(height: 14),
-
-                GlassTextField(
-                  controller: _locationController,
-                  labelText: 'Location / Venue',
-                  hintText: 'e.g. Science Complex Hall B',
-                  validator: (v) => AppValidators.validateRequired(v, 'Location'),
-                ),
-                const SizedBox(height: 14),
-
-                // Date Time Picker
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Date & Time',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                    ),
-                    const SizedBox(height: 6),
-                    InkWell(
-                      onTap: _pickDateTime,
-                      borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.white24),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              _startsAt.toString().substring(0, 16),
-                              style: const TextStyle(fontSize: 13.5),
-                            ),
-                            const Icon(Icons.calendar_month_rounded, size: 18),
-                          ],
+                  // Cover image picker
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Cover Image (optional)',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 6),
+                      InkWell(
+                        onTap: _isPickingImage ? null : _pickCoverImage,
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          height: 120,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.white24),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: _coverPreviewBytes != null
+                              ? Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    Image.memory(_coverPreviewBytes!, fit: BoxFit.cover),
+                                    Positioned(
+                                      top: 6,
+                                      right: 6,
+                                      child: InkWell(
+                                        onTap: _removeCoverImage,
+                                        borderRadius: BorderRadius.circular(20),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
+                                            color: Colors.black54,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.close_rounded, size: 16, color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Center(
+                                  child: _isPickingImage
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      : Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: const [
+                                            Icon(Icons.add_photo_alternate_outlined, size: 26, color: Colors.white54),
+                                            SizedBox(height: 6),
+                                            Text(
+                                              'Tap to add a cover image',
+                                              style: TextStyle(fontSize: 12, color: Colors.white54),
+                                            ),
+                                          ],
+                                        ),
+                                ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
 
-                GlassTextField(
-                  controller: _descController,
-                  labelText: 'Description',
-                  hintText: 'Event agenda, speakers, and schedule…',
-                  maxLines: 2,
-                  validator: (v) => AppValidators.validateRequired(v, 'Description'),
-                ),
-                const SizedBox(height: 24),
+                  GlassTextField(
+                    controller: _titleController,
+                    labelText: 'Event Title',
+                    hintText: 'e.g. Annual Campus Hackathon',
+                    validator: (v) => AppValidators.validateRequired(v, 'Title'),
+                  ),
+                  const SizedBox(height: 14),
 
-                GlassButton(
-                  width: double.infinity,
-                  height: 44,
-                  text: 'Publish Event',
-                  isLoading: _isLoading,
-                  onPressed: _handleCreate,
-                ),
-              ],
+                  GlassTextField(
+                    controller: _locationController,
+                    labelText: 'Location / Venue',
+                    hintText: 'e.g. Science Complex Hall B',
+                    validator: (v) => AppValidators.validateRequired(v, 'Location'),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Date Time Picker
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Date & Time',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 6),
+                      InkWell(
+                        onTap: _pickDateTime,
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.white24),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _startsAt.toString().substring(0, 16),
+                                style: const TextStyle(fontSize: 13.5),
+                              ),
+                              const Icon(Icons.calendar_month_rounded, size: 18),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  GlassTextField(
+                    controller: _descController,
+                    labelText: 'Description',
+                    hintText: 'Event agenda, speakers, and schedule…',
+                    maxLines: 2,
+                    validator: (v) => AppValidators.validateRequired(v, 'Description'),
+                  ),
+                  const SizedBox(height: 24),
+
+                  GlassButton(
+                    width: double.infinity,
+                    height: 44,
+                    text: 'Publish Event',
+                    isLoading: _isLoading,
+                    onPressed: _handleCreate,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
