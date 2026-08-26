@@ -45,6 +45,27 @@ class MessageModel {
     );
   }
 
+  /// Serializes for local caching, mirroring the Supabase row shape -
+  /// same approach as PostModel.toJson.
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'conversation_id': conversationId,
+      'sender_id': senderId,
+      'content': content,
+      'read_by': readBy,
+      'created_at': createdAt,
+      'profiles': sender?.toJson(),
+      'is_pending': isPending,
+    };
+  }
+
+  /// Deserializes a locally-cached entry (see [toJson]).
+  factory MessageModel.fromCachedJson(Map<String, dynamic> json) {
+    final message = MessageModel.fromJson(json);
+    return message.copyWith(isPending: json['is_pending'] as bool? ?? false);
+  }
+
   MessageModel copyWith({
     String? content,
     List<String>? readBy,
