@@ -23,7 +23,9 @@ class _CommentSectionWidgetState extends State<CommentSectionWidget> {
   final _commentController = TextEditingController();
   List<CommentModel> _comments = [];
   bool _isLoading = true;
-  bool _isSending = false;
+  // Comment ids currently being retried, so each row can show its own
+  // small spinner instead of one big loading state for the whole list.
+  final Set<String> _retryingIds = {};
 
   @override
   void initState() {
@@ -39,6 +41,8 @@ class _CommentSectionWidgetState extends State<CommentSectionWidget> {
 
   Future<void> _loadComments() async {
     final feed = context.read<FeedProvider>();
+    // Returns the cached list instantly (offline-safe) and kicks off a
+    // background refresh - see FeedProvider.getComments.
     final list = await feed.getComments(widget.postId);
     if (mounted) {
       setState(() {
@@ -54,27 +58,46 @@ class _CommentSectionWidgetState extends State<CommentSectionWidget> {
 
     final auth = context.read<AuthProvider>();
     final user = auth.user;
+    final profile = auth.profile;
     if (user == null) {
       ToastOverlay.show(context, 'Sign in to comment', type: ToastType.error);
       return;
     }
 
-    setState(() => _isSending = true);
-
+    // Local-first: this returns immediately with a pending comment, it
+    // does not wait for the network - the comment appears in the list
+    // right away, offline or not.
     final feed = context.read<FeedProvider>();
     final comment = await feed.addComment(
       postId: widget.postId,
       authorId: user.id,
       content: text,
+      authorProfile: profile,
     );
 
     if (mounted) {
-      setState(() => _isSending = false);
-      if (comment != null) {
-        _commentController.clear();
-        setState(() {
-          _comments.add(comment);
-        });
+      _commentController.clear();
+      setState(() {
+        _comments.add(comment);
+      });
+    }
+  }
+
+  Future<void> _handleRetryComment(CommentModel comment) async {
+    if (_retryingIds.contains(comment.id)) return;
+    setState(() => _retryingIds.add(comment.id));
+
+    final feed = context.read<FeedProvider>();
+    final ok = await feed.retryComment(widget.postId, comment.id);
+
+    if (mounted) {
+      setState(() => _retryingIds.remove(comment.id));
+      if (ok) {
+        // Re-read from cache so this row picks up the server-confirmed
+        // comment (real id, etc.) instead of staying "pending" forever.
+        _loadComments();
+      } else {
+        ToastOverlay.show(context, 'Still no connection - will retry again', type: ToastType.info);
       }
     }
   }
@@ -130,6 +153,7 @@ class _CommentSectionWidgetState extends State<CommentSectionWidget> {
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, i) {
                 final c = _comments[i];
+                final isRetrying = _retryingIds.contains(c.id);
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -140,43 +164,79 @@ class _CommentSectionWidgetState extends State<CommentSectionWidget> {
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  c.author?.username ?? 'anonymous',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
+                      child: Opacity(
+                        // Slightly dim a comment that hasn't reached the
+                        // server yet, same idea as PostCard's pending badge.
+                        opacity: c.isPending ? 0.7 : 1.0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    c.author?.username ?? 'anonymous',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                ),
-                                Text(
-                                  AppFormatters.timeAgo(c.createdAt),
-                                  style: TextStyle(
-                                    fontSize: 10.5,
-                                    color: isDark ? AppColors.darkInk500 : AppColors.lightInk500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              c.content,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isDark ? AppColors.darkInk200 : AppColors.lightInk200,
+                                  if (c.isPending)
+                                    InkWell(
+                                      onTap: () => _handleRetryComment(c),
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (isRetrying)
+                                            SizedBox(
+                                              width: 9,
+                                              height: 9,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 1.3,
+                                                color: AppColors.lime500,
+                                              ),
+                                            )
+                                          else
+                                            Icon(Icons.refresh_rounded, size: 11, color: AppColors.lime500),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            isRetrying ? 'Sending…' : 'Retry',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.lime500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  else
+                                    Text(
+                                      AppFormatters.timeAgo(c.createdAt),
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        color: isDark ? AppColors.darkInk500 : AppColors.lightInk500,
+                                      ),
+                                    ),
+                                ],
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 3),
+                              Text(
+                                c.content,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: isDark ? AppColors.darkInk200 : AppColors.lightInk200,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -206,14 +266,8 @@ class _CommentSectionWidgetState extends State<CommentSectionWidget> {
               ),
               const SizedBox(width: 8),
               IconButton(
-                icon: _isSending
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.send_rounded, size: 18, color: AppColors.violet400),
-                onPressed: _isSending ? null : _handleAddComment,
+                icon: const Icon(Icons.send_rounded, size: 18, color: AppColors.violet400),
+                onPressed: _handleAddComment,
               ),
             ],
           ),
