@@ -65,8 +65,13 @@ class _ChatThreadState extends State<ChatThread> {
     final myId = auth.user?.id ?? '';
     final messages = chat.activeMessages;
     final isLoading = chat.isLoadingMessages;
+    final isGroup = widget.conversation.isGroup;
 
     final other = widget.conversation.otherProfile;
+    // For a group (club) chat, otherProfile is always null (see the fix in
+    // MessageService.fetchConversations), so this correctly falls through
+    // to the conversation's own title - the club name - rather than ever
+    // showing a random member's name here.
     final title = other?.fullName ?? other?.username ?? widget.conversation.title ?? 'Direct Message';
 
     _scrollToBottom();
@@ -86,16 +91,27 @@ class _ChatThreadState extends State<ChatThread> {
           ),
           child: Row(
             children: [
-              AvatarView(
-                url: other?.avatarUrl,
-                name: title,
-                size: 34,
-                onTap: () {
-                  if (other?.username != null) {
-                    ui.openProfile(other!.username);
-                  }
-                },
-              ),
+              if (isGroup)
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: AppColors.violet500.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.groups_rounded, size: 18, color: AppColors.violet400),
+                )
+              else
+                AvatarView(
+                  url: other?.avatarUrl,
+                  name: title,
+                  size: 34,
+                  onTap: () {
+                    if (other?.username != null) {
+                      ui.openProfile(other!.username);
+                    }
+                  },
+                ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -106,7 +122,15 @@ class _ChatThreadState extends State<ChatThread> {
                       title,
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                     ),
-                    if (other?.username != null)
+                    if (isGroup)
+                      Text(
+                        'Club group chat',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? AppColors.darkInk400 : AppColors.lightInk400,
+                        ),
+                      )
+                    else if (other?.username != null)
                       Text(
                         '@${other!.username}',
                         style: TextStyle(
@@ -133,7 +157,7 @@ class _ChatThreadState extends State<ChatThread> {
               : messages.isEmpty
                   ? Center(
                       child: Text(
-                        'Say hello to $title!',
+                        isGroup ? 'Say hello to $title!' : 'Say hello to $title!',
                         style: TextStyle(
                           fontSize: 13,
                           color: isDark ? AppColors.darkInk400 : AppColors.lightInk400,
@@ -147,7 +171,7 @@ class _ChatThreadState extends State<ChatThread> {
                       itemBuilder: (context, i) {
                         final msg = messages[i];
                         final isMe = msg.senderId == myId;
-                        return MessageBubble(message: msg, isMe: isMe);
+                        return MessageBubble(message: msg, isMe: isMe, isGroup: isGroup);
                       },
                     ),
         ),
