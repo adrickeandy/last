@@ -9,11 +9,16 @@ import '../../../providers/chat_provider.dart';
 class MessageBubble extends StatefulWidget {
   final MessageModel message;
   final bool isMe;
+  // True for club/group conversations. When true, non-me bubbles show the
+  // sender's name above the content - not needed for direct messages since
+  // you already know who you're talking to.
+  final bool isGroup;
 
   const MessageBubble({
     super.key,
     required this.message,
     required this.isMe,
+    this.isGroup = false,
   });
 
   @override
@@ -43,6 +48,8 @@ class _MessageBubbleState extends State<MessageBubble> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final message = widget.message;
     final isMe = widget.isMe;
+    final showSenderName = widget.isGroup && !isMe;
+    final senderName = message.sender?.fullName ?? message.sender?.username ?? 'Member';
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -79,6 +86,18 @@ class _MessageBubbleState extends State<MessageBubble> {
                 child: Column(
                   crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                   children: [
+                    if (showSenderName)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Text(
+                          senderName,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.violet300,
+                          ),
+                        ),
+                      ),
                     Text(
                       message.content,
                       style: TextStyle(
