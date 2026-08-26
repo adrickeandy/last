@@ -75,11 +75,17 @@ class AppEnv {
     defaultValue: 'gemini-3.5-flash-lite',
   );
 
-  // NOTE: this used to end in "/models" for the old
-  // models/{model}:streamGenerateContent endpoint. The service now targets
-  // the current Interactions API at "/v1beta/interactions" (model is a body
-  // field there, not part of the path), so the trailing "/models" segment
-  // was removed — leaving it in would silently 404/misroute every request.
+  // CORRECTED: this previously had the "/models" segment stripped, based on
+  // an incorrect assumption that the service had switched to a body-based
+  // "Interactions" API where the model isn't part of the URL. That's not
+  // what the code actually does — pegasus_service.dart still calls the
+  // standard streamGenerateContent method — and Google's documented
+  // endpoint for that method is:
+  //   https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent
+  // The model IS part of the path, under /models/. Stripping that segment
+  // is exactly what made every Pegasus request 404. This constant is just
+  // the host + version; pegasus_service.dart now appends '/models/$geminiModel:...'
+  // itself, matching the real endpoint shape.
   static const String geminiBaseUrl =
       'https://generativelanguage.googleapis.com/v1beta';
 
