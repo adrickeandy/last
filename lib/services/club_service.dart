@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/club_model.dart';
+import '../models/profile_model.dart';
 import 'supabase_service.dart';
 
 class ClubService {
@@ -127,5 +128,21 @@ class ClubService {
         .eq('club_id', clubId)
         .count(CountOption.exact);
     return res.count ?? 0;
+  }
+
+  /// Full member roster for a club, owners first, so ClubMembersDialog can
+  /// show who's in the club and let the current user start a DM with any
+  /// of them.
+  Future<List<ProfileModel>> fetchClubMembers(String clubId) async {
+    final data = await _client
+        .from('club_members')
+        .select('user_id, role, profiles(id, username, full_name, avatar_url, is_verified)')
+        .eq('club_id', clubId)
+        .order('role', ascending: true); // 'owner' sorts before 'member' alphabetically
+
+    return (data as List)
+        .where((row) => row['profiles'] != null)
+        .map((row) => ProfileModel.fromJson(row['profiles'] as Map<String, dynamic>))
+        .toList();
   }
 }
