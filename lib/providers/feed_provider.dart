@@ -11,9 +11,10 @@ import '../services/local_cache_service.dart';
 /// - On load, cached posts render immediately (instant, works offline).
 /// - Refreshing (pull-to-refresh or coming back online) fetches only posts
 ///   newer than the newest one already held — never the whole table again.
-/// - New posts are written to the local cache immediately, before the
-///   network call even starts, and are retried automatically if that
-///   network call fails while offline.
+/// - New posts and comments are written to the local cache immediately,
+///   before the network call even starts, and are retried automatically
+///   if that network call fails while offline — plus a manual [retryPost]
+///   / [retryComment] for a "tap to retry" button in the UI.
 ///
 /// A full re-fetch only ever happens once: the very first time the app
 /// runs with no cache at all.
@@ -137,7 +138,7 @@ class FeedProvider extends ChangeNotifier {
   /// restart via the cache) before the network call even starts. If the
   /// network call fails — e.g. no connection — the post stays in the feed
   /// marked as pending and is retried automatically on the next successful
-  /// [loadFeed] call.
+  /// [loadFeed] call, or manually via [retryPost].
   Future<bool> createPost({
     required String authorId,
     required String content,
@@ -203,6 +204,7 @@ class FeedProvider extends ChangeNotifier {
       } else {
         await _cache.saveCachedFeed(_feedPosts);
       }
+      notifyListeners();
       return true;
     } catch (e) {
       print('[FeedProvider] Failed to sync pending post ${pendingPost.id}: $e');
@@ -218,6 +220,22 @@ class FeedProvider extends ChangeNotifier {
     for (final post in pending) {
       await _syncPendingPost(post, isConfession: false);
     }
+  }
+
+  /// Manual "tap to retry" for a single stuck post — wire this to a retry
+  /// icon in PostCard. Returns true if it's not pending at all (already
+  /// synced) or if the retry succeeded.
+  Future<bool> retryPost(String postId) async {
+    var index = _feedPosts.indexWhere((p) => p.id == postId);
+    final isConfession = index == -1;
+    if (isConfession) {
+      index = _confessions.indexWhere((p) => p.id == postId);
+    }
+    if (index == -1) return false;
+
+    final post = isConfession ? _confessions[index] : _feedPosts[index];
+    if (!post.isPending) return true;
+    return _syncPendingPost(post, isConfession: isConfession);
   }
 
   Future<void> toggleLike(String postId, String userId) async {
@@ -258,35 +276,107 @@ class FeedProvider extends ChangeNotifier {
     }
   }
 
+  /// Cache-first comments: returns the cached list instantly (including
+  /// any still-pending comments), then refreshes from Supabase in the
+  /// background and retries any pending comments it finds.
   Future<List<CommentModel>> getComments(String postId) async {
-    return await _postService.fetchComments(postId);
+    final cached = await _cache.loadCachedComments(postId);
+    unawaited(_refreshComments(postId));
+    if (cached.isNotEmpty) return cached;
+
+    try {
+      final fresh = await _postService.fetchComments(postId);
+      await _cache.saveCachedComments(postId, fresh);
+      return fresh;
+    } catch (e) {
+      print('[FeedProvider] getComments error: $e');
+      return [];
+    }
   }
 
-  Future<CommentModel?> addComment({
+  Future<void> _refreshComments(String postId) async {
+    try {
+      final fresh = await _postService.fetchComments(postId);
+      final cached = await _cache.loadCachedComments(postId);
+      final pending = cached.where((c) => c.isPending).toList();
+      final merged = [...fresh, ...pending];
+      await _cache.saveCachedComments(postId, merged);
+      for (final p in pending) {
+        unawaited(_syncPendingComment(p));
+      }
+    } catch (e) {
+      // Offline or server error - just keep what's already cached.
+    }
+  }
+
+  /// Local-first comment: appears instantly in the cache (and returns
+  /// immediately) before the network call starts, exactly like [createPost].
+  Future<CommentModel> addComment({
     required String postId,
     required String authorId,
     required String content,
+    ProfileModel? authorProfile,
   }) async {
+    final tempId = 'local-${_uuid.v4()}';
+    final now = DateTime.now().toUtc().toIso8601String();
+
+    final pendingComment = CommentModel(
+      id: tempId,
+      postId: postId,
+      authorId: authorId,
+      content: content,
+      createdAt: now,
+      author: authorProfile,
+      isPending: true,
+    );
+
+    final cached = await _cache.loadCachedComments(postId);
+    cached.add(pendingComment);
+    await _cache.saveCachedComments(postId, cached);
+
+    final index = _feedPosts.indexWhere((p) => p.id == postId);
+    if (index != -1) {
+      final p = _feedPosts[index];
+      _feedPosts[index] = p.copyWith(commentCount: p.commentCount + 1);
+      notifyListeners();
+      unawaited(_cache.saveCachedFeed(_feedPosts));
+    }
+
+    unawaited(_syncPendingComment(pendingComment));
+
+    return pendingComment;
+  }
+
+  Future<bool> _syncPendingComment(CommentModel pendingComment) async {
     try {
-      final comment = await _postService.addComment(
-        postId: postId,
-        authorId: authorId,
-        content: content,
+      final serverComment = await _postService.addComment(
+        postId: pendingComment.postId,
+        authorId: pendingComment.authorId,
+        content: pendingComment.content,
       );
 
-      final index = _feedPosts.indexWhere((p) => p.id == postId);
-      if (index != -1) {
-        final p = _feedPosts[index];
-        _feedPosts[index] = p.copyWith(commentCount: p.commentCount + 1);
-        notifyListeners();
-        unawaited(_cache.saveCachedFeed(_feedPosts));
+      final cached = await _cache.loadCachedComments(pendingComment.postId);
+      final idx = cached.indexWhere((c) => c.id == pendingComment.id);
+      if (idx != -1) {
+        cached[idx] = serverComment;
+      } else {
+        cached.add(serverComment);
       }
-
-      return comment;
+      await _cache.saveCachedComments(pendingComment.postId, cached);
+      return true;
     } catch (e) {
-      print('[FeedProvider] addComment error: $e');
-      return null;
+      print('[FeedProvider] Failed to sync pending comment ${pendingComment.id}: $e');
+      return false;
     }
+  }
+
+  /// Manual "tap to retry" for a single stuck comment.
+  Future<bool> retryComment(String postId, String commentId) async {
+    final cached = await _cache.loadCachedComments(postId);
+    final idx = cached.indexWhere((c) => c.id == commentId);
+    if (idx == -1) return false;
+    if (!cached[idx].isPending) return true;
+    return _syncPendingComment(cached[idx]);
   }
 }
 
