@@ -6,11 +6,13 @@ import '../../core/widgets/glass_container.dart';
 import '../../core/widgets/skeleton_loader.dart';
 import '../../core/widgets/toast_overlay.dart';
 import '../../models/club_model.dart';
+import '../../models/profile_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/ui_provider.dart';
 import '../../services/club_service.dart';
 import 'widgets/create_club_dialog.dart';
+import 'widgets/club_members_dialog.dart';
 
 class ClubsScreen extends StatefulWidget {
   const ClubsScreen({super.key});
@@ -106,6 +108,37 @@ class _ClubsScreenState extends State<ClubsScreen> {
     } catch (e) {
       if (mounted) {
         ToastOverlay.show(context, 'Could not open group chat: $e', type: ToastType.error);
+      }
+    }
+  }
+
+  // Shows the roster; the dialog only returns who was tapped (same
+  // "pick, don't act" contract as NewChatDialog) - this method (which stays
+  // mounted after the dialog closes) does the actual network call so it can
+  // show its own error toast if starting the DM fails.
+  Future<void> _openMembers(ClubModel club) async {
+    final user = context.read<AuthProvider>().user;
+    final selected = await ClubMembersDialog.show(context, club, currentUserId: user?.id);
+    if (selected == null || !mounted) return;
+    await _startDirectMessage(selected);
+  }
+
+  Future<void> _startDirectMessage(ProfileModel other) async {
+    final user = context.read<AuthProvider>().user;
+    if (user == null) {
+      ToastOverlay.show(context, 'Sign in to send messages', type: ToastType.info);
+      return;
+    }
+
+    final chat = context.read<ChatProvider>();
+    final ui = context.read<UIProvider>();
+
+    try {
+      await chat.startOrGetDirectChat(user.id, other.id);
+      if (mounted) ui.setTab(AppTab.messages);
+    } catch (e) {
+      if (mounted) {
+        ToastOverlay.show(context, 'Could not start chat: $e', type: ToastType.error);
       }
     }
   }
@@ -233,11 +266,24 @@ class _ClubsScreenState extends State<ClubsScreen> {
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold),
                                     ),
-                                    Text(
-                                      '${club.memberCount} members',
-                                      style: TextStyle(
-                                        fontSize: 11.5,
-                                        color: isDark ? AppColors.darkInk400 : AppColors.lightInk400,
+                                    // Tappable: opens the member roster, from
+                                    // which you can start a DM with anyone.
+                                    InkWell(
+                                      onTap: () => _openMembers(club),
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            '${club.memberCount} members',
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              decoration: TextDecoration.underline,
+                                              decorationColor: isDark ? AppColors.darkInk400 : AppColors.lightInk400,
+                                              color: isDark ? AppColors.darkInk400 : AppColors.lightInk400,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ],
