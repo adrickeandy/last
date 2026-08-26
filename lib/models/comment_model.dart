@@ -37,6 +37,30 @@ class CommentModel {
     );
   }
 
+  /// Serializes for local caching, mirroring the Supabase row shape
+  /// (including the embedded `profiles` relation) - same approach as
+  /// PostModel.toJson so [LocalCacheService] can treat every entity the
+  /// same way.
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'post_id': postId,
+      'author_id': authorId,
+      'content': content,
+      'created_at': createdAt,
+      'profiles': author?.toJson(),
+      'is_pending': isPending,
+    };
+  }
+
+  /// Deserializes a locally-cached entry (see [toJson]) - same as
+  /// [fromJson] but also restores `isPending`, which a raw Supabase row
+  /// never carries.
+  factory CommentModel.fromCachedJson(Map<String, dynamic> json) {
+    final comment = CommentModel.fromJson(json);
+    return comment.copyWith(isPending: json['is_pending'] as bool? ?? false);
+  }
+
   CommentModel copyWith({
     String? content,
     ProfileModel? author,
