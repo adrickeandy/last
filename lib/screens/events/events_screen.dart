@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
@@ -155,104 +156,133 @@ class _EventsScreenState extends State<EventsScreen> {
                 for (final ev in _events)
                   GlassContainer(
                     margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Date badge
-                        Container(
-                          width: 54,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          decoration: BoxDecoration(
-                            color: AppColors.violet500.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(14),
+                        // Cover image banner - only rendered when the event
+                        // has one, so events without a cover keep the
+                        // original compact layout untouched below.
+                        if (ev.coverUrl != null && ev.coverUrl!.isNotEmpty)
+                          ClipRRect(
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(20),
+                              topRight: Radius.circular(20),
+                            ),
+                            child: CachedNetworkImage(
+                              imageUrl: ev.coverUrl!,
+                              height: 140,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                height: 140,
+                                color: Colors.black12,
+                              ),
+                              errorWidget: (context, url, error) => const SizedBox.shrink(),
+                            ),
                           ),
-                          child: Column(
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
                             children: [
-                              Text(
-                                AppFormatters.getMonthShort(ev.startsAt),
-                                style: const TextStyle(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.violet400,
+                              // Date badge
+                              Container(
+                                width: 54,
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.violet500.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(14),
                                 ),
-                              ),
-                              Text(
-                                AppFormatters.getDayNumber(ev.startsAt),
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.violet300,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-
-                        // Title & Details
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                ev.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 4),
-                              if (ev.location != null && ev.location!.isNotEmpty) ...[
-                                Row(
+                                child: Column(
                                   children: [
-                                    const Icon(Icons.location_on_outlined, size: 13, color: AppColors.coral400),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: Text(
-                                        ev.location!,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: isDark ? AppColors.darkInk400 : AppColors.lightInk400,
-                                        ),
+                                    Text(
+                                      AppFormatters.getMonthShort(ev.startsAt),
+                                      style: const TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.violet400,
+                                      ),
+                                    ),
+                                    Text(
+                                      AppFormatters.getDayNumber(ev.startsAt),
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.violet300,
                                       ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 2),
-                              ],
-                              Row(
-                                children: [
-                                  const Icon(Icons.access_time_rounded, size: 13, color: AppColors.lime400),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    AppFormatters.formatEventDate(ev.startsAt),
-                                    style: TextStyle(
-                                      fontSize: 11.5,
-                                      color: isDark ? AppColors.darkInk500 : AppColors.lightInk500,
-                                    ),
-                                  ),
-                                  if (ev.rsvpCount > 0) ...[
-                                    const SizedBox(width: 8),
+                              ),
+                              const SizedBox(width: 14),
+
+                              // Title & Details
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
                                     Text(
-                                      '· ${ev.rsvpCount} going',
-                                      style: const TextStyle(fontSize: 11.5, color: AppColors.violet300),
+                                      ev.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    if (ev.location != null && ev.location!.isNotEmpty) ...[
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.location_on_outlined, size: 13, color: AppColors.coral400),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              ev.location!,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: isDark ? AppColors.darkInk400 : AppColors.lightInk400,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 2),
+                                    ],
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.access_time_rounded, size: 13, color: AppColors.lime400),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          AppFormatters.formatEventDate(ev.startsAt),
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            color: isDark ? AppColors.darkInk500 : AppColors.lightInk500,
+                                          ),
+                                        ),
+                                        if (ev.rsvpCount > 0) ...[
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            '· ${ev.rsvpCount} going',
+                                            style: const TextStyle(fontSize: 11.5, color: AppColors.violet300),
+                                          ),
+                                        ],
+                                      ],
                                     ),
                                   ],
-                                ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+
+                              // RSVP Button
+                              GlassButton(
+                                variant: ev.isGoing ? GlassButtonVariant.secondary : GlassButtonVariant.primary,
+                                text: ev.isGoing ? 'Going' : 'RSVP',
+                                height: 36,
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                onPressed: () => _handleRsvp(ev),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: 12),
-
-                        // RSVP Button
-                        GlassButton(
-                          variant: ev.isGoing ? GlassButtonVariant.secondary : GlassButtonVariant.primary,
-                          text: ev.isGoing ? 'Going' : 'RSVP',
-                          height: 36,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          onPressed: () => _handleRsvp(ev),
                         ),
                       ],
                     ),
