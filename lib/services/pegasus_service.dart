@@ -150,8 +150,12 @@ Pegasus; never mention Gemini or Google's model names.
     List<AiMessageModel> fullConversation,
     String apiKey,
   ) async* {
+    // FIX: was missing the required "/models/" path segment, which made
+    // every request 404 (see env.dart's geminiBaseUrl comment for the full
+    // story). Google's documented endpoint is:
+    //   {base}/models/{model}:streamGenerateContent?alt=sse
     final uri = Uri.parse(
-      '${AppEnv.geminiBaseUrl}/${AppEnv.geminiModel}:streamGenerateContent?alt=sse',
+      '${AppEnv.geminiBaseUrl}/models/${AppEnv.geminiModel}:streamGenerateContent?alt=sse',
     );
 
     final windowed = fullConversation.length > AppEnv.geminiMaxHistoryTurns * 2
