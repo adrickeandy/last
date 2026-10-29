@@ -1,0 +1,85 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'core/sync/sync_queue_service.dart';
+import 'core/theme/app_colors.dart';
+import 'core/theme/app_theme.dart';
+import 'core/widgets/app_logo.dart';
+import 'core/theme/theme_provider.dart';
+import 'providers/auth_provider.dart';
+import 'providers/chat_provider.dart';
+import 'providers/feed_provider.dart';
+import 'providers/notification_provider.dart';
+import 'providers/ui_provider.dart';
+import 'screens/auth/landing_screen.dart';
+import 'screens/shell/desktop_shell.dart';
+
+class CampusXApp extends StatelessWidget {
+  const CampusXApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => FeedProvider()),
+        ChangeNotifierProvider(create: (_) => ChatProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => UIProvider()),
+
+        // Expose the existing singleton queue to the widget tree.
+        //
+        // This does NOT create another SyncQueueService. It exposes the
+        // already-existing singleton so UI can later display pending/failed
+        // writes or provide a "Retry failed" action.
+        ChangeNotifierProvider<SyncQueueService>.value(
+          value: SyncQueueService.instance,
+        ),
+      ],
+      child: Consumer2<ThemeProvider, AuthProvider>(
+        builder: (context, themeProvider, authProvider, child) {
+          return MaterialApp(
+            title: 'Plateau High Zone',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: themeProvider.themeMode,
+            home: _buildHome(authProvider),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildHome(AuthProvider auth) {
+    if (auth.isLoading) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const AppLogo(size: 64),
+              const SizedBox(height: 24),
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppColors.violet500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (auth.isAuthenticated) {
+      return const DesktopShell();
+    }
+
+    return const LandingScreen();
+  }
+}
