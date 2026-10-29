@@ -1,0 +1,106 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/profile_model.dart';
+import 'supabase_service.dart';
+
+class ProfileService {
+  final SupabaseClient _client = SupabaseService.client;
+
+  Future<ProfileModel?> fetchProfileByUsername(String username) async {
+    final data = await _client
+        .from('profiles')
+        .select('*')
+        .eq('username', username)
+        .maybeSingle();
+
+    if (data != null) {
+      return ProfileModel.fromJson(data);
+    }
+    return null;
+  }
+
+  /// Used where we only know a user's id (e.g. a marketplace listing's
+  /// seller_id) and need their profile for display / navigation.
+  Future<ProfileModel?> fetchProfileById(String userId) async {
+    final data = await _client
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+    return data != null ? ProfileModel.fromJson(data) : null;
+  }
+
+  Future<ProfileModel> updateProfile(String userId, Map<String, dynamic> updates) async {
+    final data = await _client
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId)
+        .select()
+        .single();
+
+    return ProfileModel.fromJson(data);
+  }
+
+  Future<List<ProfileModel>> searchProfiles(String query) async {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty) return [];
+
+    final data = await _client
+        .from('profiles')
+        .select('*')
+        .or('username.ilike.%$cleanQuery%,full_name.ilike.%$cleanQuery%')
+        .limit(25);
+
+    return (data as List).map((json) => ProfileModel.fromJson(json as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> followUser(String followerId, String followingId) async {
+    await _client.from('follows').insert({
+      'follower_id': followerId,
+      'following_id': followingId,
+    });
+  }
+
+  Future<void> unfollowUser(String followerId, String followingId) async {
+    await _client
+        .from('follows')
+        .delete()
+        .eq('follower_id', followerId)
+        .eq('following_id', followingId);
+  }
+
+  Future<bool> isFollowing(String followerId, String followingId) async {
+    final data = await _client
+        .from('follows')
+        .select('follower_id')
+        .eq('follower_id', followerId)
+        .eq('following_id', followingId)
+        .maybeSingle();
+
+    return data != null;
+  }
+
+  Future<Map<String, int>> fetchFollowCounts(String userId) async {
+    // NOTE: `follows` has no `id` column (primary key is
+    // follower_id/following_id composite) — selecting 'id' throws a
+    // Postgres "column does not exist" error on every call, which was
+    // the root cause of the profile screen hanging forever with no
+    // error shown. Select an existing column instead.
+    final followersRes = await _client
+        .from('follows')
+        .select('follower_id')
+        .eq('following_id', userId)
+        .count(CountOption.exact);
+
+    final followingRes = await _client
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', userId)
+        .count(CountOption.exact);
+
+    return {
+      'followers': followersRes.count ?? 0,
+      'following': followingRes.count ?? 0,
+    };
+  }
+}

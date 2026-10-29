@@ -1,0 +1,254 @@
+name: Build Plateau High Zone (Windows + Android)
+
+on:
+  push:
+    branches: [ main, master, new ]
+  pull_request:
+    branches: [ main, master, new ]
+  workflow_dispatch:
+
+jobs:
+  # ===========================================================================
+  # WINDOWS
+  # ===========================================================================
+  build-windows:
+    name: Build Windows Desktop (x64) + Installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Regenerate native Windows platform scaffold
+        shell: pwsh
+        run: |
+          if (Test-Path windows) { Remove-Item -Recurse -Force windows }
+          flutter create --platforms=windows .
+
+      - name: Apply Plateau High Zone branding to the generated scaffold
+        shell: pwsh
+        run: |
+          Copy-Item -Path "branding\app_icon.ico" -Destination "windows\runner\resources\app_icon.ico" -Force
+          (Get-Content windows\CMakeLists.txt) -replace 'set\(BINARY_NAME ".*"\)', 'set(BINARY_NAME "PlateauHighZone")' | Set-Content windows\CMakeLists.txt
+          (Get-Content windows\runner\main.cpp) -replace 'CreateAndShow\(L".*?",', 'CreateAndShow(L"Plateau High Zone",' | Set-Content windows\runner\main.cpp
+          (Get-Content windows\runner\Runner.rc) -replace '"CompanyName", ".*?"', '"CompanyName", "Plateau High Zone"' -replace '"FileDescription", ".*?"', '"FileDescription", "Plateau High Zone"' -replace '"ProductName", ".*?"', '"ProductName", "Plateau High Zone"' | Set-Content windows\runner\Runner.rc
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Write build-time env file
+        shell: pwsh
+        run: |
+          $envJson = @{
+            SUPABASE_URL             = "${{ secrets.SUPABASE_URL }}"
+            SUPABASE_PUBLISHABLE_KEY = "${{ secrets.SUPABASE_PUBLISHABLE_KEY }}"
+            SUPABASE_ANON_KEY        = "${{ secrets.SUPABASE_ANON_KEY }}"
+            GEMINI_API_KEY           = "${{ secrets.GEMINI_API_KEY }}"
+            GEMINI_API_KEYS          = "${{ secrets.GEMINI_API_KEYS }}"
+            GEMINI_MODEL             = "gemini-3.5-flash-lite"
+          } | ConvertTo-Json
+          Set-Content -Path "env.json" -Value $envJson
+
+      - name: Build Windows Desktop (Release)
+        run: flutter build windows --release --dart-define-from-file=env.json
+
+      - name: Zip raw build output
+        shell: pwsh
+        run: |
+          $releaseDir = "build/windows/x64/runner/Release"
+          if (-not (Test-Path $releaseDir)) {
+            $releaseDir = "build/windows/runner/Release"
+          }
+          Compress-Archive -Path "$releaseDir/*" -DestinationPath "PlateauHighZone-windows-x64.zip"
+
+      - name: Upload raw Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: PlateauHighZone-windows-x64-raw
+          path: PlateauHighZone-windows-x64.zip
+          if-no-files-found: error
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer (PlateauHighZoneSetup.exe)
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer\campusx.iss"
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: PlateauHighZone-Windows-Installer
+          path: installer/Output/PlateauHighZoneSetup.exe
+          if-no-files-found: error
+
+  # ===========================================================================
+  # ANDROID
+  # ===========================================================================
+  build-android:
+    name: Build Android (APK)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      # Regenerate android/ with the current Flutter template
+      # (fixes "deleted Android v1 embedding" error from an old android/ folder).
+      - name: Regenerate native Android platform scaffold
+        run: |
+          rm -rf android
+          flutter create --platforms=android --org com.plateauhighzone .
+
+      # Messenger permissions + deep link + app name, applied to the fresh manifest.
+      # Declares: internet, network state, camera, microphone, media (photos/video/
+      # audio), file access, notifications, vibration, wake lock, foreground service,
+      # bluetooth (headsets). Deep link: campusx://login-callback
+      - name: Apply PHZ permissions and settings to Android manifest
+        run: |
+          cat > /tmp/manifest_patch.py <<'PYEOF'
+          import re
+          p = 'android/app/src/main/AndroidManifest.xml'
+          s = open(p, encoding='utf-8').read()
+
+          perms = [
+              'android.permission.INTERNET',
+              'android.permission.ACCESS_NETWORK_STATE',
+              'android.permission.CAMERA',
+              'android.permission.RECORD_AUDIO',
+              'android.permission.MODIFY_AUDIO_SETTINGS',
+              'android.permission.READ_MEDIA_IMAGES',
+              'android.permission.READ_MEDIA_VIDEO',
+              'android.permission.READ_MEDIA_AUDIO',
+              'android.permission.POST_NOTIFICATIONS',
+              'android.permission.VIBRATE',
+              'android.permission.WAKE_LOCK',
+              'android.permission.RECEIVE_BOOT_COMPLETED',
+              'android.permission.FOREGROUND_SERVICE',
+              'android.permission.BLUETOOTH_CONNECT',
+          ]
+          lines = ''.join('    <uses-permission android:name="%s"/>\n' % x for x in perms)
+          lines += '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>\n'
+          lines += '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>\n'
+          lines += '    <uses-feature android:name="android.hardware.camera" android:required="false"/>\n'
+          lines += '    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>\n'
+          lines += '    <uses-feature android:name="android.hardware.microphone" android:required="false"/>\n'
+          s = s.replace('<application', lines + '    <application', 1)
+
+          # Let url_launcher open links, email and phone numbers (Android 11+ package visibility)
+          q = ('        <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="https"/></intent>\n'
+               '        <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="http"/></intent>\n'
+               '        <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="mailto"/></intent>\n'
+               '        <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="tel"/></intent>\n'
+               '        <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="sms"/></intent>\n')
+          if '</queries>' in s:
+              s = s.replace('</queries>', q + '    </queries>', 1)
+          else:
+              s = s.replace('</manifest>', '    <queries>\n' + q + '    </queries>\n</manifest>', 1)
+
+          # Deep link (app_links / Supabase auth redirect): campusx://login-callback
+          deep = ('\n            <intent-filter>\n'
+                  '                <action android:name="android.intent.action.VIEW"/>\n'
+                  '                <category android:name="android.intent.category.DEFAULT"/>\n'
+                  '                <category android:name="android.intent.category.BROWSABLE"/>\n'
+                  '                <data android:scheme="campusx" android:host="login-callback"/>\n'
+                  '            </intent-filter>')
+          s = s.replace('</intent-filter>', '</intent-filter>' + deep, 1)
+
+          s = re.sub(r'android:label="[^"]*"', 'android:label="PHZ"', s, count=1)
+          open(p, 'w', encoding='utf-8').write(s)
+          print(s)
+          PYEOF
+          python3 /tmp/manifest_patch.py
+
+      # Fixes: ":file_picker is currently compiled against android-34" error.
+      # Forces every plugin to compile against API 36. Safe to re-run (idempotent).
+      - name: Force compileSdk 36 for all plugins
+        run: |
+          if [ -f android/build.gradle.kts ]; then
+            f=android/build.gradle.kts
+            if ! grep -q "compileSdk36Patch" "$f"; then
+              cat > /tmp/patch.txt <<'PATCH'
+          // compileSdk36Patch
+          subprojects {
+              afterEvaluate {
+                  if (project.extensions.findByName("android") != null) {
+                      configure<com.android.build.gradle.BaseExtension> {
+                          compileSdkVersion(36)
+                      }
+                  }
+              }
+          }
+
+          PATCH
+              sed -i 's/^          //' /tmp/patch.txt
+              cat /tmp/patch.txt "$f" > /tmp/new.gradle && mv /tmp/new.gradle "$f"
+            fi
+          elif [ -f android/build.gradle ]; then
+            f=android/build.gradle
+            if ! grep -q "compileSdk36Patch" "$f"; then
+              cat > /tmp/patch.txt <<'PATCH'
+          // compileSdk36Patch
+          subprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty('android')) {
+                      project.android {
+                          compileSdkVersion 36
+                      }
+                  }
+              }
+          }
+
+          PATCH
+              sed -i 's/^          //' /tmp/patch.txt
+              cat /tmp/patch.txt "$f" > /tmp/new.gradle && mv /tmp/new.gradle "$f"
+            fi
+          fi
+          echo "---- patched head of build file ----"
+          head -20 android/build.gradle* || true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Write build-time env file
+        run: |
+          jq -n \
+            --arg url   "${{ secrets.SUPABASE_URL }}" \
+            --arg pub   "${{ secrets.SUPABASE_PUBLISHABLE_KEY }}" \
+            --arg anon  "${{ secrets.SUPABASE_ANON_KEY }}" \
+            --arg gkey  "${{ secrets.GEMINI_API_KEY }}" \
+            --arg gkeys "${{ secrets.GEMINI_API_KEYS }}" \
+            '{SUPABASE_URL:$url, SUPABASE_PUBLISHABLE_KEY:$pub, SUPABASE_ANON_KEY:$anon,
+              GEMINI_API_KEY:$gkey, GEMINI_API_KEYS:$gkeys, GEMINI_MODEL:"gemini-3.5-flash-lite"}' > env.json
+
+      - name: Build APKs (split per ABI)
+        run: flutter build apk --release --split-per-abi --dart-define-from-file=env.json
+
+      - name: Upload Android APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: PlateauHighZone-Android-APKs
+          path: build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error
